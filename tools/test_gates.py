@@ -34,7 +34,7 @@ from index_utils import (UnsafeFolderName, check_folder_name,  # noqa: E402
 from licenses import permits_icon_derivation  # noqa: E402
 from process_photos import DEFAULT_MARGIN, process_folder  # noqa: E402
 import desaturate_svg  # noqa: E402
-from check_index import check_entries  # noqa: E402
+from check_index import check_entries, check_generic_rules  # noqa: E402
 
 
 def make_root(tmp):
@@ -877,6 +877,124 @@ class GreyTwinTests(unittest.TestCase):
         desaturate_svg.write_twin(self.entry, self.root)
         self.assertEqual(path.read_text(encoding="utf-8"), text)
         self.assertEqual(path.stat().st_mtime_ns, before)
+
+
+class GenericPlaceholderTests(unittest.TestCase):
+    """README "Generic placeholders": one reserved folder per class, flagged
+    `generic: true` with its `genericClass`, mapped to no mission. The API
+    serves them only labelled as generic, so the index must never let a
+    mission's own row carry the flag or a reserved folder."""
+
+    REPO = Path(__file__).resolve().parent.parent
+
+    @staticmethod
+    def _row(gclass="optical", **kw):
+        folder = kw.pop("folder", f"generic-{gclass}")
+        row = {"folder": folder, "missionID": "", "artStatus": "house-generated",
+               "SVGColourPath": "", "SVGBlackPath": f"satellites/{folder}/{folder}-icon.svg",
+               "references": ["https://example.org/eo"], "generic": True,
+               "genericClass": gclass}
+        row.update(kw)
+        return row
+
+    def _problems(self, rows):
+        # SVGColourPath left empty so the grey-twin gate has nothing to read;
+        # its "needs a SVGColourPath" finding is covered elsewhere.
+        return [p for p in check_entries(rows, Path(tempfile.mkdtemp()))
+                if "needs a SVGColourPath" not in p]
+
+    def _has(self, problems, text):
+        self.assertTrue(any(text in p for p in problems), problems)
+
+    def test_one_row_per_class_passes(self):
+        rows = [self._row(c) for c in ("optical", "sar", "smallsat")]
+        self.assertEqual(self._problems(rows), [])
+
+    def test_real_index_and_rules_are_clean(self):
+        index = json.loads((self.REPO / "index.json").read_text())
+        rows = sorted((e["genericClass"], e["folder"], e["missionID"])
+                      for e in index if e.get("generic") is True)
+        self.assertEqual(rows, [("optical", "generic-optical", ""),
+                                ("sar", "generic-sar", ""),
+                                ("smallsat", "generic-smallsat", "")])
+        rules = json.loads((self.REPO / "generic-classes.json").read_text())
+        self.assertEqual(check_generic_rules(rules, index), [])
+        self.assertEqual(rules["default"], "optical")
+
+    def test_two_rows_of_one_class_fail(self):
+        problems = self._problems([self._row(), self._row(folder="generic-optical2")])
+        self._has(problems, "exactly one entry per class")
+
+    def test_wrong_folder_for_class_fails(self):
+        self._has(self._problems([self._row("sar", folder="swot")]), "must live in folder")
+
+    def test_generic_row_with_a_mission_fails(self):
+        self._has(self._problems([self._row(missionID="123")]), "maps to no mission")
+
+    def test_missing_class_fails(self):
+        self._has(self._problems([self._row(genericClass=None)]), "needs a `genericClass`")
+
+    def test_reserved_folder_without_flag_fails(self):
+        for flag in (False, None):
+            row = self._row()
+            del row["genericClass"]
+            if flag is None:
+                del row["generic"]
+            else:
+                row["generic"] = flag
+            with self.subTest(flag=flag):
+                self._has(self._problems([row]), "reserved for generic placeholders")
+
+    def test_class_without_flag_fails(self):
+        row = self._row(folder="swot", generic=False)
+        self._has(self._problems([row]), "`genericClass` without `generic: true`")
+
+    def test_non_boolean_flag_fails(self):
+        self._has(self._problems([self._row(generic="yes")]), "must be true or false")
+
+    def test_generic_needs_house_art_and_icon(self):
+        problems = self._problems([self._row(artStatus="hand-drawn", SVGBlackPath="")])
+        self._has(problems, "house drawing")
+        self._has(problems, "needs its icon")
+
+    # --- generic-classes.json ------------------------------------------------
+    def _rules(self, **kw):
+        rules = {"schema": 1, "default": "optical", "rules": [
+            {"class": "sar", "when": {"instrument_type_contains": ["sar"]}},
+            {"class": "smallsat", "when": {"any_of": ["constellation_unit"]}}]}
+        rules.update(kw)
+        return rules
+
+    def _entries(self):
+        return [self._row(c) for c in ("optical", "sar", "smallsat")]
+
+    def test_rules_valid(self):
+        self.assertEqual(check_generic_rules(self._rules(), self._entries()), [])
+
+    def test_rules_class_without_entry_fails(self):
+        problems = check_generic_rules(self._rules(default="thermal"), self._entries())
+        self._has(problems, "default 'thermal' has no generic entry")
+        rules = self._rules(rules=[{"class": "lidar", "when": {"any_of": ["horizon_entry"]}}])
+        self._has(check_generic_rules(rules, self._entries()), "class 'lidar' has no generic entry")
+
+    def test_rules_bad_predicates_fail(self):
+        cases = {
+            "unknown predicate": {"orbit_is": ["geo"]},
+            "exactly one predicate": {"any_of": ["horizon_entry"],
+                                      "instrument_type_contains": ["sar"]},
+            "non-empty list of strings": {"instrument_type_contains": []},
+            "any_of accepts only": {"any_of": ["is_cubesat"]},
+        }
+        for text, when in cases.items():
+            with self.subTest(text=text):
+                rules = self._rules(rules=[{"class": "sar", "when": when}])
+                self._has(check_generic_rules(rules, self._entries()), text)
+
+    def test_rules_shape_fails(self):
+        self._has(check_generic_rules([], self._entries()), "must be a JSON object")
+        self._has(check_generic_rules(self._rules(schema=2), self._entries()), "schema must be 1")
+        self._has(check_generic_rules(self._rules(rules={}), self._entries()), "rules must be a list")
+        self._has(check_generic_rules(self._rules(extra=1), self._entries()), "unknown keys")
 
 
 if __name__ == "__main__":

@@ -46,6 +46,65 @@ if one exists. Each entry in `index.json` carries an explicit `folder` field as 
 identity; the path fields are optional content and may be `""`. See the photo-only
 lane in `TASKING.md`.
 
+## Generic placeholders
+
+Three folders are **reserved**: `satellites/generic-optical/`,
+`satellites/generic-sar/` and `satellites/generic-smallsat/`. Each holds one
+house drawing of a generic Earth-observation spacecraft that depicts no real
+vehicle, and each `index.json` entry carries `generic: true`, a `genericClass`
+(`optical`, `sar`, `smallsat`) and no `missionID`. They exist so that every
+mission in the Explorer has a baseline image (George, 19 Oct 2026: "I'd like to
+have at least a baseline for all missions for launch").
+
+The rule, which `tools/check_index.py` and the eogos-api enforce between them:
+
+- a generic is **served only with `kind: "generic"` and a caption** ("Generic
+  illustration. We do not yet hold an image of this spacecraft."), and the
+  portal always shows that caption under it;
+- it is **never a mission's own image**: no mission maps to it, a mission with
+  its own folder never sees it, and a mission whose index rows conflict does
+  not fall back to it;
+- folders named `generic-*` are reserved by name, not by a prefix character
+  (the API's folder guard refuses a leading underscore): `check_index.py`
+  fails if a `generic-*` folder lacks the flag, if a generic row has a
+  missionID or sits in any folder other than `generic-<class>`, or if two rows
+  share a class.
+
+### Which generic a mission gets: `generic-classes.json`
+
+The API reads `generic-classes.json` (repo root) beside `index.json`, so a
+curator can change the choice with an image sync and API restart, no API
+release. The rules are evaluated in order; the first that matches picks the
+class, and no match falls to `default`:
+
+```json
+{
+  "schema": 1,
+  "rules": [
+    {"class": "sar", "when": {"instrument_type_contains": ["imaging radar", "sar", "synthetic aperture"]}},
+    {"class": "smallsat", "when": {"any_of": ["constellation_unit", "horizon_entry"]}}
+  ],
+  "default": "optical"
+}
+```
+
+| Predicate | Value | Matches when |
+|---|---|---|
+| `instrument_type_contains` | non-empty list of strings | any of the mission's instrument type strings contains any listed string (case-insensitive substring) |
+| `any_of` | non-empty list of flags | any listed flag is true for the mission: `constellation_unit` (the mission appears in a constellation roster), `horizon_entry` (the mission is a Horizon entry) |
+
+Each rule holds exactly one predicate. Every class named (in a rule or as
+`default`) must have its generic row. `note` is an optional free-text key.
+`python3 tools/check_index.py` validates the file; the API applies the same
+validation and, if the file is missing or malformed, serves no generic at all
+(a mission with no folder 404s, as before) and logs why.
+
+The drawings were made like any house drawing (`tools/house_art`), but from a
+written brief rather than reference imagery: "it should look like an EO
+satellite not a comms satellite" — a box bus, a nadir-pointing payload, solar
+wings, small star trackers, no parabolic dish. Their build script is
+`tools/house_art/candidates/generic/build.py`.
+
 ## Deriving photo cutouts
 
 Transparent cutouts (`-photo-cut-*.png`) are derived from raw `-photo.*` files by

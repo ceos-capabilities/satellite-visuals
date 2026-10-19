@@ -1,0 +1,9 @@
+{
+  "source": "satellites/generic-sar/grey/generic-sar-grey.svg",
+  "svg_sha256": "ee0ef0f5555e0cbb61c7c5b48b2d3f9566a18c17711659aaaf8672ac672ed11a",
+  "renderer": "@resvg/resvg-js 2.6.2",
+  "renders": {
+    "generic-sar-grey-1024px.png": "2d1557e4fe38b676578c4b66a662e1c98d7e2935f63ac6e6b3ff79e99128a9dc",
+    "generic-sar-grey-512px.png": "d65e45a9d96c50e936a1d4480b1b88f759160931c90240f871efeb57cc984de6"
+  }
+}

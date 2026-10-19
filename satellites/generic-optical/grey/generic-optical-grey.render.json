@@ -1,0 +1,9 @@
+{
+  "source": "satellites/generic-optical/grey/generic-optical-grey.svg",
+  "svg_sha256": "6b5c3815969b22962a1588d7de4eb24d6c981babaaa23a2191772191cfd55c71",
+  "renderer": "@resvg/resvg-js 2.6.2",
+  "renders": {
+    "generic-optical-grey-1024px.png": "525ff620ffc2b2b32ab6b81d04524a0281ed1444834b3bb3d04066425f2a8877",
+    "generic-optical-grey-512px.png": "f5f654b0ccc7dd04c7e0e52d20b78760e589ca6ec51a9d41d43986734376e346"
+  }
+}

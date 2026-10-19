@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "note": "Which generic placeholder a mission with no image of its own is shown. Rules are evaluated in order, first match wins; no match falls to default. Every class named here must have exactly one index.json row with generic: true and that genericClass (folder generic-<class>). See README, 'Generic placeholders'.",
+  "rules": [
+    {"class": "sar", "when": {"instrument_type_contains": ["imaging radar", "sar", "synthetic aperture"]}},
+    {"class": "smallsat", "when": {"any_of": ["constellation_unit", "horizon_entry"]}}
+  ],
+  "default": "optical"
+}

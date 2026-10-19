@@ -35,6 +35,14 @@ Checks:
     rights-holder-imposed display condition, not a general link slot — a new
     licence with its own notice condition must be added here deliberately);
   - any licenceNoticeUrl value is https;
+  - the generic placeholders (README "Generic placeholders"): `generic`, when
+    present, is a boolean; a `generic: true` entry names its `genericClass`,
+    lives in the reserved folder `generic-<class>`, maps to no mission
+    (missionID ""), and is a house drawing with its icon; at most one entry per
+    class; any folder named `generic-*` must be such an entry; and
+    `generic-classes.json` is well formed and names only classes that have an
+    entry — the API serves these to missions with no image of their own, only
+    ever labelled as generic;
   - every entry with a colour SVG has its greyscale twin (grey/<folder>-grey.svg
     plus the two PNG renders), the twin is stamped from the current colour SVG
     (not stale) and carries no chroma — the served form is the grey twin, so a
@@ -60,6 +68,18 @@ REPO = Path(__file__).resolve().parent.parent
 #   house-generated  written from a structured description by tools/house_art
 ART_STATUS = ("hand-drawn", "house-generated")
 
+# Generic placeholders: folders the API may serve, labelled `kind: "generic"`
+# with a caption, to a mission that has no folder of its own. Reserved by
+# name (`generic-<class>`; not an underscore prefix, which the API's folder
+# guard refuses) and by the `generic` flag on the index entry; the two must
+# agree. generic-classes.json picks the class per mission.
+GENERIC_PREFIX = "generic-"
+GENERIC_RULES_FILE = "generic-classes.json"
+GENERIC_CLASS_RE = re.compile(r"^[a-z0-9]+$")
+# The mission facts a rule may test (computed by the API from its corpus).
+GENERIC_FLAGS = ("constellation_unit", "horizon_entry")
+GENERIC_PREDICATES = ("instrument_type_contains", "any_of")
+
 # licence (normalised) -> the exact notice URL the rights holder requires
 NOTICE_REQUIRED = {
     "esa standard licence": "https://www.esa.int/ESA_Multimedia/Copyright_Notice_Images",
@@ -79,6 +99,7 @@ def check_entries(entries, repo=REPO):
     fields are resolved against (tests point it at a temporary layout)."""
     problems = []
     seen_folders = {}
+    generic_by_class = {}
 
     for i, e in enumerate(entries):
         folder = e.get("folder")
@@ -153,6 +174,37 @@ def check_entries(entries, repo=REPO):
             problems.append(f"{name}: missionID must be digits or \"\" (blank = "
                             f"unmapped, issue #99), found {mission_id!r}")
 
+        # --- generic placeholders -------------------------------------------
+        generic = e.get("generic")
+        gclass = e.get("genericClass")
+        if generic is not None and not isinstance(generic, bool):
+            problems.append(f"{name}: `generic` must be true or false, found {generic!r}")
+        if generic is True:
+            if not (isinstance(gclass, str) and GENERIC_CLASS_RE.match(gclass)):
+                problems.append(f"{name}: a generic placeholder needs a `genericClass` "
+                                f"(lowercase letters/digits), found {gclass!r}")
+            else:
+                generic_by_class.setdefault(gclass, []).append(name)
+                if folder != GENERIC_PREFIX + gclass:
+                    problems.append(f"{name}: the {gclass!r} generic placeholder must "
+                                    f"live in folder {GENERIC_PREFIX + gclass!r}")
+            mid = e.get("missionID", "")
+            if mid != "":
+                problems.append(f"{name}: a generic placeholder maps to no mission — "
+                                f"missionID must be \"\", found {mid!r}")
+            if art_status != "house-generated":
+                problems.append(f"{name}: a generic placeholder must be a house "
+                                f"drawing (artStatus house-generated)")
+            if not e.get("SVGBlackPath"):
+                problems.append(f"{name}: a generic placeholder needs its icon "
+                                f"(SVGBlackPath) — lists fall back to it")
+        else:
+            if gclass is not None:
+                problems.append(f"{name}: `genericClass` without `generic: true`")
+            if isinstance(folder, str) and folder.startswith(GENERIC_PREFIX):
+                problems.append(f"{name}: folders named {GENERIC_PREFIX}* are reserved "
+                                f"for generic placeholders and must carry `generic: true`")
+
         # --- licence conditions ---------------------------------------------
         lic = _norm(e.get("imageLicense", ""))
         notice = e.get("licenceNoticeUrl")
@@ -170,12 +222,75 @@ def check_entries(entries, repo=REPO):
         # --- greyscale twin (the served form of a house drawing) -----------
         problems.extend(check_grey_twin(e, repo))
 
+    for gclass, names in sorted(generic_by_class.items()):
+        if len(names) > 1:
+            problems.append(f"generic class {gclass!r} on {len(names)} entries "
+                            f"({', '.join(names)}) — exactly one entry per class")
+    return problems
+
+
+def check_generic_rules(rules, entries):
+    """Findings for generic-classes.json against the index; [] when clean.
+
+    Shape: {"schema": 1, "rules": [{"class": C, "when": {PRED: VALUE}}, ...],
+    "default": C}. PRED is `instrument_type_contains` (non-empty list of
+    strings, matched case-insensitively as substrings of the mission's
+    instrument types) or `any_of` (non-empty list drawn from GENERIC_FLAGS).
+    Every class named must have a generic entry. The API applies the same
+    validation and disables generics entirely (404, as before) on a failure."""
+    problems = []
+    classes = {e.get("genericClass") for e in entries
+               if isinstance(e, dict) and e.get("generic") is True}
+    if not isinstance(rules, dict):
+        return [f"{GENERIC_RULES_FILE}: must be a JSON object"]
+    if rules.get("schema") != 1:
+        problems.append(f"{GENERIC_RULES_FILE}: schema must be 1, found {rules.get('schema')!r}")
+    unknown = set(rules) - {"schema", "note", "rules", "default"}
+    if unknown:
+        problems.append(f"{GENERIC_RULES_FILE}: unknown keys {sorted(unknown)}")
+    default = rules.get("default")
+    if default not in classes:
+        problems.append(f"{GENERIC_RULES_FILE}: default {default!r} has no generic "
+                        f"entry (classes: {sorted(c for c in classes if c)})")
+    rows = rules.get("rules")
+    if not isinstance(rows, list):
+        return problems + [f"{GENERIC_RULES_FILE}: rules must be a list"]
+    for i, r in enumerate(rows):
+        where = f"{GENERIC_RULES_FILE}: rules[{i}]"
+        if not isinstance(r, dict) or set(r) != {"class", "when"}:
+            problems.append(f"{where} must be an object with exactly `class` and `when`")
+            continue
+        if r["class"] not in classes:
+            problems.append(f"{where}: class {r['class']!r} has no generic entry")
+        when = r["when"]
+        if not isinstance(when, dict) or len(when) != 1:
+            problems.append(f"{where}: `when` must hold exactly one predicate")
+            continue
+        (pred, value), = when.items()
+        if pred not in GENERIC_PREDICATES:
+            problems.append(f"{where}: unknown predicate {pred!r} "
+                            f"(known: {', '.join(GENERIC_PREDICATES)})")
+        elif not (isinstance(value, list) and value
+                  and all(isinstance(v, str) and v.strip() for v in value)):
+            problems.append(f"{where}: {pred} needs a non-empty list of strings")
+        elif pred == "any_of" and not set(value) <= set(GENERIC_FLAGS):
+            problems.append(f"{where}: any_of accepts only {', '.join(GENERIC_FLAGS)}, "
+                            f"found {sorted(set(value) - set(GENERIC_FLAGS))}")
     return problems
 
 
 def main():
     entries = json.load(open(REPO / "index.json"))
     problems = check_entries(entries)
+    rules_path = REPO / GENERIC_RULES_FILE
+    if any(isinstance(e, dict) and e.get("generic") is True for e in entries) \
+            or rules_path.exists():
+        try:
+            rules = json.loads(rules_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            problems.append(f"{GENERIC_RULES_FILE}: unreadable ({exc})")
+        else:
+            problems.extend(check_generic_rules(rules, entries))
     for p in problems:
         print(f"FAIL {p}")
     if not problems:
