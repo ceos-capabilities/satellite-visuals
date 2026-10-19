@@ -34,7 +34,7 @@ from index_utils import (UnsafeFolderName, check_folder_name,  # noqa: E402
 from licenses import permits_icon_derivation  # noqa: E402
 from process_photos import DEFAULT_MARGIN, process_folder  # noqa: E402
 import desaturate_svg  # noqa: E402
-from check_index import check_entries  # noqa: E402
+from check_index import check_entries, check_generic_rules  # noqa: E402
 
 
 def make_root(tmp):
@@ -877,6 +877,165 @@ class GreyTwinTests(unittest.TestCase):
         desaturate_svg.write_twin(self.entry, self.root)
         self.assertEqual(path.read_text(encoding="utf-8"), text)
         self.assertEqual(path.stat().st_mtime_ns, before)
+
+
+class GenericPlaceholderTests(unittest.TestCase):
+    """README "Generic placeholders": one reserved folder per class, flagged
+    `generic: true` with its `genericClass`, mapped to no mission. The API
+    serves them only labelled as generic, so the index must never let a
+    mission's own row carry the flag or a reserved folder."""
+
+    REPO = Path(__file__).resolve().parent.parent
+    SVG = '<svg xmlns="http://www.w3.org/2000/svg"><path fill="#6d716f" d="M0 0h1v1z"/></svg>'
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _row(self, gclass="optical", files=True, **kw):
+        """A generic row whose served files (and grey twin) really exist in
+        the temp tree, unless files=False."""
+        folder = kw.pop("folder", f"generic-{gclass}")
+        base = f"satellites/{folder}/{folder}"
+        row = {"folder": folder, "missionID": "", "artStatus": "house-generated",
+               "SVGColourPath": f"{base}.svg", "SVGBlackPath": f"{base}-icon.svg",
+               "PNG512Path": f"{base}-512px.png", "PNG1024Path": f"{base}-1024px.png",
+               "references": ["https://example.org/eo"], "generic": True,
+               "genericClass": gclass}
+        if files:
+            (self.root / "satellites" / folder).mkdir(parents=True, exist_ok=True)
+            (self.root / row["SVGColourPath"]).write_text(self.SVG, encoding="utf-8")
+            for field in ("SVGBlackPath", "PNG512Path", "PNG1024Path"):
+                (self.root / row[field]).write_text("x")
+            row.update(desaturate_svg.write_twin(row, self.root))
+            pngs = [row["PNGGrey1024Path"], row["PNGGrey512Path"]]
+            for rel in pngs:
+                (self.root / rel).write_bytes(b"png")
+            desaturate_svg.write_render_stamp(row["SVGGreyPath"], pngs, "test", self.root)
+        row.update(kw)
+        return row
+
+    def _problems(self, rows):
+        return check_entries(rows, self.root)
+
+    def _has(self, problems, text):
+        self.assertTrue(any(text in p for p in problems), problems)
+
+    def test_one_row_per_class_passes(self):
+        rows = [self._row(c) for c in ("optical", "sar", "smallsat")]
+        self.assertEqual(self._problems(rows), [])
+
+    def test_real_index_and_rules_are_clean(self):
+        index = json.loads((self.REPO / "index.json").read_text())
+        rows = sorted((e["genericClass"], e["folder"], e["missionID"])
+                      for e in index if e.get("generic") is True)
+        self.assertEqual(rows, [("optical", "generic-optical", ""),
+                                ("sar", "generic-sar", ""),
+                                ("smallsat", "generic-smallsat", "")])
+        self.assertEqual(check_entries(index), [])
+        rules = json.loads((self.REPO / "generic-classes.json").read_text())
+        self.assertEqual(check_generic_rules(rules, index), [])
+        self.assertEqual(rules["default"], "optical")
+
+    def test_two_rows_of_one_class_fail(self):
+        problems = self._problems([self._row(), self._row(folder="generic-optical2")])
+        self._has(problems, "exactly one entry per class")
+
+    def test_wrong_folder_for_class_fails(self):
+        self._has(self._problems([self._row("sar", folder="swot")]), "must live in folder")
+
+    def test_generic_row_with_a_mission_fails(self):
+        self._has(self._problems([self._row(missionID="123")]), "maps to no mission")
+
+    def test_missing_class_fails(self):
+        self._has(self._problems([self._row(genericClass=None)]), "needs a `genericClass`")
+
+    def test_class_with_trailing_newline_fails(self):
+        self._has(self._problems([self._row(genericClass="optical\n")]), "needs a `genericClass`")
+
+    def test_reserved_folder_without_flag_fails(self):
+        for flag in (False, None):
+            row = self._row()
+            del row["genericClass"]
+            if flag is None:
+                del row["generic"]
+            else:
+                row["generic"] = flag
+            with self.subTest(flag=flag):
+                self._has(self._problems([row]), "reserved for generic placeholders")
+
+    def test_class_without_flag_fails(self):
+        row = self._row(folder="swot", generic=False)
+        self._has(self._problems([row]), "`genericClass` without `generic: true`")
+
+    def test_non_boolean_flag_fails(self):
+        self._has(self._problems([self._row(generic="yes")]), "must be true or false")
+
+    def test_generic_needs_house_art(self):
+        self._has(self._problems([self._row(artStatus="hand-drawn")]), "house drawing")
+
+    def test_every_served_file_must_exist(self):
+        for field in ("SVGBlackPath", "PNG512Path", "PNG1024Path"):
+            with self.subTest(field=field, case="unnamed"):
+                self._has(self._problems([self._row(**{field: ""})]),
+                          f"needs {field}")
+            with self.subTest(field=field, case="absent"):
+                row = self._row()
+                (self.root / row[field]).unlink()
+                self._has(self._problems([row]), f"{field} {row[field]!r} does not exist")
+
+    # --- generic-classes.json ------------------------------------------------
+    def _rules(self, **kw):
+        rules = {"schema": 1, "default": "optical", "rules": [
+            {"class": "sar", "when": {"instrument_type_contains": ["synthetic aperture"]}},
+            {"class": "smallsat", "when": {"any_of": ["constellation_unit"]}}]}
+        rules.update(kw)
+        return rules
+
+    def _entries(self):
+        return [self._row(c) for c in ("optical", "sar", "smallsat")]
+
+    def test_rules_valid(self):
+        self.assertEqual(check_generic_rules(self._rules(), self._entries()), [])
+
+    def test_rules_class_without_entry_fails(self):
+        problems = check_generic_rules(self._rules(default="thermal"), self._entries())
+        self._has(problems, "default 'thermal' has no generic entry")
+        rules = self._rules(rules=[{"class": "lidar", "when": {"any_of": ["horizon_entry"]}}])
+        self._has(check_generic_rules(rules, self._entries()), "class 'lidar' has no generic entry")
+
+    def test_rules_bad_predicates_fail(self):
+        cases = {
+            "unknown predicate": {"orbit_is": ["geo"]},
+            "exactly one predicate": {"any_of": ["horizon_entry"],
+                                      "instrument_type_contains": ["sar"]},
+            "non-empty list of strings": {"instrument_type_contains": []},
+            "any_of accepts only": {"any_of": ["is_cubesat"]},
+        }
+        for text, when in cases.items():
+            with self.subTest(text=text):
+                rules = self._rules(rules=[{"class": "sar", "when": when}])
+                self._has(check_generic_rules(rules, self._entries()), text)
+
+    def test_rules_non_string_classes_fail_cleanly(self):
+        """A list or object where a class name belongs is a FAIL line, never a
+        TypeError from hashing it."""
+        rules = self._rules(default=["optical"],
+                            rules=[{"class": {"x": 1}, "when": {"any_of": ["horizon_entry"]}}])
+        problems = check_generic_rules(rules, self._entries())
+        self._has(problems, "default ['optical'] has no generic entry")
+        self._has(problems, "class {'x': 1} has no generic entry")
+        entries = self._entries() + [{"generic": True, "genericClass": ["sar"]}]
+        self.assertEqual(check_generic_rules(self._rules(), entries), [])
+
+    def test_rules_shape_fails(self):
+        self._has(check_generic_rules([], self._entries()), "must be a JSON object")
+        self._has(check_generic_rules(self._rules(schema=2), self._entries()), "schema must be 1")
+        self._has(check_generic_rules(self._rules(rules={}), self._entries()), "rules must be a list")
+        self._has(check_generic_rules(self._rules(extra=1), self._entries()), "unknown keys")
 
 
 if __name__ == "__main__":

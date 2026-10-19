@@ -1,0 +1,9 @@
+{
+  "source": "satellites/generic-smallsat/grey/generic-smallsat-grey.svg",
+  "svg_sha256": "518ec21102f02904743fb9f6c5ea7680b93f4d06bb2d1609cb116784ed7d0325",
+  "renderer": "@resvg/resvg-js 2.6.2",
+  "renders": {
+    "generic-smallsat-grey-1024px.png": "554d3ccd5f5cc11d4a7b82fa9acfe1a5a99527ebfe6a2e4963b4f4327e173df3",
+    "generic-smallsat-grey-512px.png": "bc4ac360f2878e809280695bba59af4a3af259af44b6240d03dd40e3e1648365"
+  }
+}
