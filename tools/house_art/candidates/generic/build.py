@@ -1,8 +1,8 @@
 """Build the generic placeholder drawings into the lane's gitignored working directory:
 
-    python3 tools/house_art/candidates/generic/build.py optical generic-optical
-    python3 tools/house_art/candidates/generic/build.py sar generic-sar
-    python3 tools/house_art/candidates/generic/build.py smallsat generic-smallsat
+    python3 tools/house_art/candidates/generic/build.py optical     # -> generic-optical
+    python3 tools/house_art/candidates/generic/build.py sar         # -> generic-sar
+    python3 tools/house_art/candidates/generic/build.py smallsat    # -> generic-smallsat
 
 compose -> checks -> SVG + icon -> description.json, into tools/out/house_art/<folder>/,
 then the usual lane steps (make_art_checker.py, apply_art.py, render_pngs.mjs).
@@ -23,7 +23,8 @@ ROUTE = ("(b) code-generating model writes the SVG directly from this structured
          "description; no reference raster is read, sampled, traced or vectorised")
 
 
-def build(design, folder):
+def build(design):
+    folder = f"generic-{design}"   # the reserved folder is fixed by the class
     base = OUT / folder
     base.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
@@ -59,5 +60,7 @@ def build(design, folder):
 
 
 if __name__ == "__main__":
-    ok = build(sys.argv[1], sys.argv[2])
+    if len(sys.argv) != 2 or sys.argv[1] not in draw.DESIGNS:
+        raise SystemExit(f"usage: build.py <{'|'.join(draw.DESIGNS)}>")
+    ok = build(sys.argv[1])
     sys.exit(0 if ok else 1)

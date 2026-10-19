@@ -23,7 +23,7 @@ NO_DISH = {"element": "parabolic dish antenna",
 
 D = {
     "optical": {
-        "mission": "Generic spacecraft (placeholder) - candidate A, optical imager",
+        "mission": "Generic EO spacecraft, optical class",
         "evidence": "C",
         "evidence_note": GEN,
         "bus": {"form": "boxy chamfered bus, gold MLI, white zenith deck",
@@ -44,7 +44,7 @@ D = {
                        "at the Earth, the wings are the only thing that reaches out.",
     },
     "sar": {
-        "mission": "Generic spacecraft (placeholder) - candidate B, radar imager",
+        "mission": "Generic EO spacecraft, SAR class",
         "evidence": "C",
         "evidence_note": GEN,
         "bus": {"form": "boxy chamfered bus, gold MLI, white zenith deck",
@@ -62,7 +62,7 @@ D = {
                        "on the other side: the panel faces the Earth.",
     },
     "smallsat": {
-        "mission": "Generic spacecraft (placeholder) - candidate C, compact smallsat",
+        "mission": "Generic EO spacecraft, smallsat class",
         "evidence": "C",
         "evidence_note": GEN,
         "bus": {"form": "near-cube chamfered bus, white structure, body-mounted cells on two faces",

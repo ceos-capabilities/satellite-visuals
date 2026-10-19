@@ -81,7 +81,7 @@ class, and no match falls to `default`:
 {
   "schema": 1,
   "rules": [
-    {"class": "sar", "when": {"instrument_type_contains": ["imaging radar", "sar", "synthetic aperture"]}},
+    {"class": "sar", "when": {"instrument_type_contains": ["imaging radar (sar)", "synthetic aperture"]}},
     {"class": "smallsat", "when": {"any_of": ["constellation_unit", "horizon_entry"]}}
   ],
   "default": "optical"
@@ -90,10 +90,10 @@ class, and no match falls to `default`:
 
 | Predicate | Value | Matches when |
 |---|---|---|
-| `instrument_type_contains` | non-empty list of strings | any of the mission's instrument type or instrument technology strings (e.g. "Imaging microwave radars", "Imaging radar (SAR)") contains any listed string (case-insensitive substring) |
+| `instrument_type_contains` | non-empty list of strings | any of the mission's instrument type or instrument technology strings (e.g. "Imaging microwave radars", "Imaging radar (SAR)") contains any listed term as a whole term (case-insensitive; the term may not be bordered by a letter or digit, so `sar` would not match inside another word) |
 | `any_of` | non-empty list of flags | any listed flag is true for the mission: `constellation_unit` (the mission's NORAD number appears in a constellation roster), `horizon_entry` (the mission is a Horizon entry) |
 
-Each rule holds exactly one predicate. Every class named (in a rule or as
+Each rule holds exactly one predicate. Known narrowness, accepted for launch (George, 19 Oct 2026): `smallsat` fires for very few missions, because constellation rosters link to missions only by NORAD number and Horizon rows rarely carry a mission id. Every class named (in a rule or as
 `default`) must have its generic row. `note` is an optional free-text key.
 `python3 tools/check_index.py` validates the file; the API applies the same
 validation and, if the file is missing or malformed, serves no generic at all

@@ -886,22 +886,40 @@ class GenericPlaceholderTests(unittest.TestCase):
     mission's own row carry the flag or a reserved folder."""
 
     REPO = Path(__file__).resolve().parent.parent
+    SVG = '<svg xmlns="http://www.w3.org/2000/svg"><path fill="#6d716f" d="M0 0h1v1z"/></svg>'
 
-    @staticmethod
-    def _row(gclass="optical", **kw):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _row(self, gclass="optical", files=True, **kw):
+        """A generic row whose served files (and grey twin) really exist in
+        the temp tree, unless files=False."""
         folder = kw.pop("folder", f"generic-{gclass}")
+        base = f"satellites/{folder}/{folder}"
         row = {"folder": folder, "missionID": "", "artStatus": "house-generated",
-               "SVGColourPath": "", "SVGBlackPath": f"satellites/{folder}/{folder}-icon.svg",
+               "SVGColourPath": f"{base}.svg", "SVGBlackPath": f"{base}-icon.svg",
+               "PNG512Path": f"{base}-512px.png", "PNG1024Path": f"{base}-1024px.png",
                "references": ["https://example.org/eo"], "generic": True,
                "genericClass": gclass}
+        if files:
+            (self.root / "satellites" / folder).mkdir(parents=True, exist_ok=True)
+            (self.root / row["SVGColourPath"]).write_text(self.SVG, encoding="utf-8")
+            for field in ("SVGBlackPath", "PNG512Path", "PNG1024Path"):
+                (self.root / row[field]).write_text("x")
+            row.update(desaturate_svg.write_twin(row, self.root))
+            pngs = [row["PNGGrey1024Path"], row["PNGGrey512Path"]]
+            for rel in pngs:
+                (self.root / rel).write_bytes(b"png")
+            desaturate_svg.write_render_stamp(row["SVGGreyPath"], pngs, "test", self.root)
         row.update(kw)
         return row
 
     def _problems(self, rows):
-        # SVGColourPath left empty so the grey-twin gate has nothing to read;
-        # its "needs a SVGColourPath" finding is covered elsewhere.
-        return [p for p in check_entries(rows, Path(tempfile.mkdtemp()))
-                if "needs a SVGColourPath" not in p]
+        return check_entries(rows, self.root)
 
     def _has(self, problems, text):
         self.assertTrue(any(text in p for p in problems), problems)
@@ -917,6 +935,7 @@ class GenericPlaceholderTests(unittest.TestCase):
         self.assertEqual(rows, [("optical", "generic-optical", ""),
                                 ("sar", "generic-sar", ""),
                                 ("smallsat", "generic-smallsat", "")])
+        self.assertEqual(check_entries(index), [])
         rules = json.loads((self.REPO / "generic-classes.json").read_text())
         self.assertEqual(check_generic_rules(rules, index), [])
         self.assertEqual(rules["default"], "optical")
@@ -933,6 +952,9 @@ class GenericPlaceholderTests(unittest.TestCase):
 
     def test_missing_class_fails(self):
         self._has(self._problems([self._row(genericClass=None)]), "needs a `genericClass`")
+
+    def test_class_with_trailing_newline_fails(self):
+        self._has(self._problems([self._row(genericClass="optical\n")]), "needs a `genericClass`")
 
     def test_reserved_folder_without_flag_fails(self):
         for flag in (False, None):
@@ -952,15 +974,23 @@ class GenericPlaceholderTests(unittest.TestCase):
     def test_non_boolean_flag_fails(self):
         self._has(self._problems([self._row(generic="yes")]), "must be true or false")
 
-    def test_generic_needs_house_art_and_icon(self):
-        problems = self._problems([self._row(artStatus="hand-drawn", SVGBlackPath="")])
-        self._has(problems, "house drawing")
-        self._has(problems, "needs its icon")
+    def test_generic_needs_house_art(self):
+        self._has(self._problems([self._row(artStatus="hand-drawn")]), "house drawing")
+
+    def test_every_served_file_must_exist(self):
+        for field in ("SVGBlackPath", "PNG512Path", "PNG1024Path"):
+            with self.subTest(field=field, case="unnamed"):
+                self._has(self._problems([self._row(**{field: ""})]),
+                          f"needs {field}")
+            with self.subTest(field=field, case="absent"):
+                row = self._row()
+                (self.root / row[field]).unlink()
+                self._has(self._problems([row]), f"{field} {row[field]!r} does not exist")
 
     # --- generic-classes.json ------------------------------------------------
     def _rules(self, **kw):
         rules = {"schema": 1, "default": "optical", "rules": [
-            {"class": "sar", "when": {"instrument_type_contains": ["sar"]}},
+            {"class": "sar", "when": {"instrument_type_contains": ["synthetic aperture"]}},
             {"class": "smallsat", "when": {"any_of": ["constellation_unit"]}}]}
         rules.update(kw)
         return rules
@@ -989,6 +1019,17 @@ class GenericPlaceholderTests(unittest.TestCase):
             with self.subTest(text=text):
                 rules = self._rules(rules=[{"class": "sar", "when": when}])
                 self._has(check_generic_rules(rules, self._entries()), text)
+
+    def test_rules_non_string_classes_fail_cleanly(self):
+        """A list or object where a class name belongs is a FAIL line, never a
+        TypeError from hashing it."""
+        rules = self._rules(default=["optical"],
+                            rules=[{"class": {"x": 1}, "when": {"any_of": ["horizon_entry"]}}])
+        problems = check_generic_rules(rules, self._entries())
+        self._has(problems, "default ['optical'] has no generic entry")
+        self._has(problems, "class {'x': 1} has no generic entry")
+        entries = self._entries() + [{"generic": True, "genericClass": ["sar"]}]
+        self.assertEqual(check_generic_rules(self._rules(), entries), [])
 
     def test_rules_shape_fails(self):
         self._has(check_generic_rules([], self._entries()), "must be a JSON object")

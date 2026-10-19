@@ -75,10 +75,14 @@ ART_STATUS = ("hand-drawn", "house-generated")
 # agree. generic-classes.json picks the class per mission.
 GENERIC_PREFIX = "generic-"
 GENERIC_RULES_FILE = "generic-classes.json"
-GENERIC_CLASS_RE = re.compile(r"^[a-z0-9]+$")
+# Same raw pattern as the API, and always used with fullmatch (re.match with
+# ^...$ would accept a trailing newline).
+GENERIC_CLASS_RE = re.compile(r"[a-z0-9]+")
 # The mission facts a rule may test (computed by the API from its corpus).
 GENERIC_FLAGS = ("constellation_unit", "horizon_entry")
 GENERIC_PREDICATES = ("instrument_type_contains", "any_of")
+# Every file the API needs before it will serve a generic class.
+GENERIC_SERVED_FIELDS = ("SVGColourPath", "SVGBlackPath", "PNG512Path", "PNG1024Path")
 
 # licence (normalised) -> the exact notice URL the rights holder requires
 NOTICE_REQUIRED = {
@@ -180,7 +184,7 @@ def check_entries(entries, repo=REPO):
         if generic is not None and not isinstance(generic, bool):
             problems.append(f"{name}: `generic` must be true or false, found {generic!r}")
         if generic is True:
-            if not (isinstance(gclass, str) and GENERIC_CLASS_RE.match(gclass)):
+            if not (isinstance(gclass, str) and GENERIC_CLASS_RE.fullmatch(gclass)):
                 problems.append(f"{name}: a generic placeholder needs a `genericClass` "
                                 f"(lowercase letters/digits), found {gclass!r}")
             else:
@@ -195,9 +199,17 @@ def check_entries(entries, repo=REPO):
             if art_status != "house-generated":
                 problems.append(f"{name}: a generic placeholder must be a house "
                                 f"drawing (artStatus house-generated)")
-            if not e.get("SVGBlackPath"):
-                problems.append(f"{name}: a generic placeholder needs its icon "
-                                f"(SVGBlackPath) — lists fall back to it")
+            # The API treats a generic folder missing any served file as absent
+            # and 404s the whole class, so all four must exist, not just be named
+            # (the grey twin and its renders are gated by check_grey_twin below).
+            for field in GENERIC_SERVED_FIELDS:
+                value = e.get(field)
+                if not (isinstance(value, str) and value):
+                    problems.append(f"{name}: a generic placeholder needs {field} "
+                                    f"— the API refuses the class without it")
+                elif not (repo / value).is_file():
+                    problems.append(f"{name}: {field} {value!r} does not exist "
+                                    f"— the API refuses the class without it")
         else:
             if gclass is not None:
                 problems.append(f"{name}: `genericClass` without `generic: true`")
@@ -234,13 +246,15 @@ def check_generic_rules(rules, entries):
 
     Shape: {"schema": 1, "rules": [{"class": C, "when": {PRED: VALUE}}, ...],
     "default": C}. PRED is `instrument_type_contains` (non-empty list of
-    strings, matched case-insensitively as substrings of the mission's
-    instrument types) or `any_of` (non-empty list drawn from GENERIC_FLAGS).
+    strings, each matched case-insensitively as a whole term — not bordered by
+    a letter or digit — within the mission's instrument types AND instrument
+    technologies) or `any_of` (non-empty list drawn from GENERIC_FLAGS).
     Every class named must have a generic entry. The API applies the same
     validation and disables generics entirely (404, as before) on a failure."""
     problems = []
     classes = {e.get("genericClass") for e in entries
-               if isinstance(e, dict) and e.get("generic") is True}
+               if isinstance(e, dict) and e.get("generic") is True
+               and isinstance(e.get("genericClass"), str)}
     if not isinstance(rules, dict):
         return [f"{GENERIC_RULES_FILE}: must be a JSON object"]
     if rules.get("schema") != 1:
@@ -249,7 +263,7 @@ def check_generic_rules(rules, entries):
     if unknown:
         problems.append(f"{GENERIC_RULES_FILE}: unknown keys {sorted(unknown)}")
     default = rules.get("default")
-    if default not in classes:
+    if not isinstance(default, str) or default not in classes:
         problems.append(f"{GENERIC_RULES_FILE}: default {default!r} has no generic "
                         f"entry (classes: {sorted(c for c in classes if c)})")
     rows = rules.get("rules")
@@ -260,7 +274,7 @@ def check_generic_rules(rules, entries):
         if not isinstance(r, dict) or set(r) != {"class", "when"}:
             problems.append(f"{where} must be an object with exactly `class` and `when`")
             continue
-        if r["class"] not in classes:
+        if not isinstance(r["class"], str) or r["class"] not in classes:
             problems.append(f"{where}: class {r['class']!r} has no generic entry")
         when = r["when"]
         if not isinstance(when, dict) or len(when) != 1:
