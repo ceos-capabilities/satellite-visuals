@@ -90,8 +90,8 @@ class, and no match falls to `default`:
 
 | Predicate | Value | Matches when |
 |---|---|---|
-| `instrument_type_contains` | non-empty list of strings | any of the mission's instrument type strings contains any listed string (case-insensitive substring) |
-| `any_of` | non-empty list of flags | any listed flag is true for the mission: `constellation_unit` (the mission appears in a constellation roster), `horizon_entry` (the mission is a Horizon entry) |
+| `instrument_type_contains` | non-empty list of strings | any of the mission's instrument type or instrument technology strings (e.g. "Imaging microwave radars", "Imaging radar (SAR)") contains any listed string (case-insensitive substring) |
+| `any_of` | non-empty list of flags | any listed flag is true for the mission: `constellation_unit` (the mission's NORAD number appears in a constellation roster), `horizon_entry` (the mission is a Horizon entry) |
 
 Each rule holds exactly one predicate. Every class named (in a rule or as
 `default`) must have its generic row. `note` is an optional free-text key.
