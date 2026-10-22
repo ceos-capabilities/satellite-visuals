@@ -30,7 +30,7 @@ REPO = Path(__file__).resolve().parent.parent.parent
 OUT = REPO / "tools" / "out" / "house_art"
 
 UA = ("Mozilla/5.0 (compatible; eo-gos-satellite-visuals/1.0; "
-      "+https://github.com/eo-gos/satellite-visuals)")
+      "+https://github.com/ceos-capabilities/satellite-visuals)")
 
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 

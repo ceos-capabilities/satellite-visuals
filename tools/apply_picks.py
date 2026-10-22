@@ -31,7 +31,7 @@ from index_utils import (UnsafeFolderName, drop_entries, ensure_entry,  # noqa: 
 from process_photos import photo_crop_of  # noqa: E402  (shared crop validator)
 
 REPO = Path(__file__).resolve().parent.parent
-UA = "satellite-visuals-curation/1.0 (https://github.com/eo-gos/satellite-visuals)"
+UA = "satellite-visuals-curation/1.0 (https://github.com/ceos-capabilities/satellite-visuals)"
 
 _ap = argparse.ArgumentParser(description=__doc__)
 _ap.add_argument("picks", help="picks.json")

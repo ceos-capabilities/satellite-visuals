@@ -61,7 +61,7 @@ REPO = Path(__file__).resolve().parent.parent
 ART_STATUS = "house-generated"
 ART_LICENCE = "CC BY 4.0"
 ART_HOLDER = "repo maintainers"
-ART_SOURCE = "https://github.com/eo-gos/satellite-visuals"
+ART_SOURCE = "https://github.com/ceos-capabilities/satellite-visuals"
 METHOD_NOTE = ("original depiction drawn from a structured description via "
                "tools/house_art (golden rule 6); reference imagery consulted, "
                "never traced, and not stored in this repository")

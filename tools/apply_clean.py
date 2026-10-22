@@ -63,7 +63,7 @@ from licenses import _norm  # noqa: E402  (local sibling module)
 
 REPO = Path(__file__).resolve().parent.parent
 TOOLS = Path(__file__).resolve().parent
-UA = "satellite-visuals-curation/1.0 (https://github.com/eo-gos/satellite-visuals)"
+UA = "satellite-visuals-curation/1.0 (https://github.com/ceos-capabilities/satellite-visuals)"
 NOTICE_URL = "https://www.esa.int/ESA_Multimedia/Copyright_Notice_Images"
 SIZES = (1024, 512)
 
