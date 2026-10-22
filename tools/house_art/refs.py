@@ -29,8 +29,8 @@ REPO = Path(__file__).resolve().parent.parent.parent
 # Gitignored. Never write a reference image anywhere else.
 OUT = REPO / "tools" / "out" / "house_art"
 
-UA = ("Mozilla/5.0 (compatible; eo-gos-satellite-visuals/1.0; "
-      "+https://github.com/eo-gos/satellite-visuals)")
+UA = ("Mozilla/5.0 (compatible; ceos-capabilities-satellite-visuals/1.0; "
+      "+https://github.com/ceos-capabilities/satellite-visuals)")
 
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 

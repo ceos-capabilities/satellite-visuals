@@ -393,6 +393,8 @@ class ApplyRefusalTests(unittest.TestCase):
         # paperwork: our own work, CC BY 4.0, with the method recorded
         row = attrib["satellites/testsat/testsat.svg"]
         self.assertEqual(row[2], "repo maintainers")
+        self.assertEqual(row[3], apply_art.ART_SOURCE)
+        self.assertTrue(row[3].startswith("https://github.com/ceos-capabilities/"))
         self.assertEqual(row[4], "CC BY 4.0")
         self.assertIn("never traced", row[5])
 

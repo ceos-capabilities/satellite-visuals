@@ -53,7 +53,7 @@ from desaturate_svg import write_twin  # noqa: E402
 from house_art import checks as art_checks  # noqa: E402
 from house_art import schema  # noqa: E402
 from house_art.refs import OUT  # noqa: E402
-from index_utils import (UnsafeFolderName, by_folder, check_folder_name,  # noqa: E402
+from index_utils import (REPO_URL, UnsafeFolderName, by_folder, check_folder_name,  # noqa: E402
                          ensure_entry, load_index, save_index)
 
 REPO = Path(__file__).resolve().parent.parent
@@ -61,7 +61,7 @@ REPO = Path(__file__).resolve().parent.parent
 ART_STATUS = "house-generated"
 ART_LICENCE = "CC BY 4.0"
 ART_HOLDER = "repo maintainers"
-ART_SOURCE = "https://github.com/eo-gos/satellite-visuals"
+ART_SOURCE = REPO_URL
 METHOD_NOTE = ("original depiction drawn from a structured description via "
                "tools/house_art (golden rule 6); reference imagery consulted, "
                "never traced, and not stored in this repository")

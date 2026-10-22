@@ -25,14 +25,14 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from index_utils import folder_of  # noqa: E402  (local sibling module)
+from index_utils import CURATION_UA, folder_of  # noqa: E402  (local sibling module)
 
 REPO = Path(__file__).resolve().parent.parent
 OUT = REPO / "tools" / "out"
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 NASA_API = "https://images-api.nasa.gov/search"
-UA = "satellite-visuals-curation/1.0 (https://github.com/eo-gos/satellite-visuals)"
+UA = CURATION_UA
 
 # Licences we accept, matched against Commons extmetadata LicenseShortName.
 # The deny-list is checked first: NC/ND variants share the "CC BY" prefix,

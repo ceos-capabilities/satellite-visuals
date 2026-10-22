@@ -25,13 +25,13 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from index_utils import (UnsafeFolderName, drop_entries, ensure_entry,  # noqa: E402
+from index_utils import (CURATION_UA, UnsafeFolderName, drop_entries, ensure_entry,  # noqa: E402
                          folder_of, load_index, parse_new_specs, save_index,
                          unbacked_folders)
 from process_photos import photo_crop_of  # noqa: E402  (shared crop validator)
 
 REPO = Path(__file__).resolve().parent.parent
-UA = "satellite-visuals-curation/1.0 (https://github.com/eo-gos/satellite-visuals)"
+UA = CURATION_UA
 
 _ap = argparse.ArgumentParser(description=__doc__)
 _ap.add_argument("picks", help="picks.json")
