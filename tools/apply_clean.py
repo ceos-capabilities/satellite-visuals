@@ -56,14 +56,14 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from index_utils import (UnsafeFolderName, drop_entries, ensure_entry,  # noqa: E402
+from index_utils import (CURATION_UA, UnsafeFolderName, drop_entries, ensure_entry,  # noqa: E402
                          folder_of, load_index, parse_new_specs, save_index,
                          unbacked_folders)
 from licenses import _norm  # noqa: E402  (local sibling module)
 
 REPO = Path(__file__).resolve().parent.parent
 TOOLS = Path(__file__).resolve().parent
-UA = "satellite-visuals-curation/1.0 (https://github.com/ceos-capabilities/satellite-visuals)"
+UA = CURATION_UA
 NOTICE_URL = "https://www.esa.int/ESA_Multimedia/Copyright_Notice_Images"
 SIZES = (1024, 512)
 

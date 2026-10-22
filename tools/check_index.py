@@ -50,13 +50,14 @@ Checks:
     (tools/desaturate_svg.py --check is the same gate, standalone).
 """
 
+import csv
 import json
 import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from index_utils import SAFE_FOLDER  # noqa: E402  (local sibling module)
+from index_utils import REPO_URL, SAFE_FOLDER  # noqa: E402  (local sibling module)
 from licenses import _norm  # noqa: E402  (local sibling module)
 from desaturate_svg import check_entry as check_grey_twin  # noqa: E402  (local sibling module)
 
@@ -293,9 +294,26 @@ def check_generic_rules(rules, entries):
     return problems
 
 
+def check_ledger(rows, repo_url=REPO_URL):
+    """ATTRIBUTIONS.csv invariant: a row whose rights holder is the repo itself
+    ("repo maintainers": house SVGs, their PNG renders, grey twins, icons) must
+    cite this repository as its source, under its current owner. Hand-added rows
+    copied from a pre-transfer checkout would otherwise reintroduce the old
+    URL. [] when clean."""
+    problems = []
+    for i, row in enumerate(rows, start=2):   # 1-based, after the header line
+        if row.get("creator_or_rights_holder") == "repo maintainers" \
+                and row.get("source_url") != repo_url:
+            problems.append(f"ATTRIBUTIONS.csv:{i}: {row.get('path')}: repo-maintainers row "
+                            f"must cite {repo_url}, found {row.get('source_url')!r}")
+    return problems
+
+
 def main():
     entries = json.load(open(REPO / "index.json"))
     problems = check_entries(entries)
+    with open(REPO / "ATTRIBUTIONS.csv", newline="", encoding="utf-8") as fh:
+        problems.extend(check_ledger(list(csv.DictReader(fh))))
     rules_path = REPO / GENERIC_RULES_FILE
     if any(isinstance(e, dict) and e.get("generic") is True for e in entries) \
             or rules_path.exists():
@@ -310,7 +328,7 @@ def main():
     if not problems:
         house = sum(1 for e in entries if e.get("artStatus") == "house-generated")
         print(f"OK   {len(entries)} entries; folders unique and consistent, "
-              f"notice conditions consistent, grey twins present and fresh, "
+              f"notice conditions consistent, grey twins present and fresh, ledger sources current, "
               f"{house} house-generated")
     return 1 if problems else 0
 

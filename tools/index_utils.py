@@ -19,6 +19,13 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 
+# Public home of this collection: the ledger source_url for house-made files,
+# the LICENSE attribution URL and the curation tools' User-Agent. The repo
+# moved from the eo-gos org on 23 Oct 2026; GitHub redirects the old name only
+# while no repo is recreated under it.
+REPO_URL = "https://github.com/ceos-capabilities/satellite-visuals"
+CURATION_UA = f"satellite-visuals-curation/1.0 ({REPO_URL})"
+
 # A folder name is ONE safe path segment. This is the security boundary, not a
 # style preference: these tools mkdir and write files under satellites/<folder>,
 # so "../escape", "a/b", "." and ".." must never reach the filesystem.
